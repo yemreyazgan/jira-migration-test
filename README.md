@@ -1,53 +1,50 @@
-📊 Jira to GitHub Issue Migration Project
+# 📊 Jira to GitHub Issue Migration Project
+
 Bu depo, Jira üzerindeki görevlerin, iş tiplerinin, öncelik derecelerinin, alt görevlerin (subtask), efor puanlarının (Story Point), versiyon bilgilerinin ve proje takvimlerinin GitHub Issues ve Milestones mimarisine kurumsal standartlarda taşınması (migration) amacıyla geliştirilmiştir.
 
-🎯 Proje Yapısı ve Eşleşmeler
+---
+
+## 🎯 Proje Yapısı ve Eşleşmeler
+
 Jira'daki mevcut proje yönetim yapısı, GitHub mimarisine birebir ve dinamik olarak şu şekilde entegre edilmiştir:
 
-Görev Başlıkları (Title): Jira'daki her bir task, özet başlıklarıyla birlikte GitHub Issue başlığı olarak aktarılmıştır.
+* **Görev Başlıkları (Title):** Jira'daki her bir task, özet başlıklarıyla birlikte GitHub Issue başlığı olarak aktarılmıştır.
+* **Proje Metadataları (Metadata Table):** Her Issue'nun en üstüne kurumsal formatta Markdown tablosu eklenmiştir:
+  * **Story Point:** Efor puanı.
+  * **Fix Version & Affects Version:** Sürüm ve ortam bilgileri.
+  * **Build Info:** Derleme/Build detayları.
+  * **Due Date:** Bitiş/Teslim tarihi.
+* **İş İçerikleri (Description):** Görevlerin teknik detayları ve açıklamaları hatasız bir şekilde biçimlendirilerek taşınmıştır.
+* **Alt Görevler (Subtasks):** Jira'da ana göreve bağlı açılan subtask'lar, GitHub Issue içerisinde etkileşimli/tıklanabilir **Checklist (`- [ ]`)** formatına dönüştürülmüştür.
+* **Proje Takvimi (Milestone):** GitHub üzerinde **"Sprint 1: Temmuz Teslimatları"** adında süreli bir Kilometre Taşı (Milestone) oluşturulmuş ve tüm görevler bu takvime bağlanmıştır.
+* **Sorumlu Atamaları (Assignee):** Taşınan tüm görevler, projenin takibi için ilgili geliştiriciye (`yemreyazgan`) otomatik olarak atanmıştır.
 
-Proje Metadataları (Metadata Table): Her Issue'nun en üstüne kurumsal formatta Markdown tablosu eklenmiştir:
+---
 
-Story Point: Efor puanı.
+## 🏷️ Kurumsal Etiket (Label) Standartları
 
-Fix Version & Affects Version: Sürüm ve ortam bilgileri.
-
-Build Info: Derleme/Build detayları.
-
-Due Date: Bitiş/Teslim tarihi.
-
-İş İçerikleri (Description): Görevlerin teknik detayları ve açıklamaları hatasız bir şekilde biçimlendirilerek taşınmıştır.
-
-Alt Görevler (Subtasks): Jira'da ana göreve bağlı açılan subtask'lar, GitHub Issue içerisinde etkileşimli/tıklanabilir Checklist (- [ ]) formatına dönüştürülmüştür.
-
-Proje Takvimi (Milestone): GitHub üzerinde "Sprint 1: Temmuz Teslimatları" adında süreli bir Kilometre Taşı (Milestone) oluşturulmuş ve tüm görevler bu takvime bağlanmıştır.
-
-Sorumlu Atamaları (Assignee): Taşınan tüm görevler, projenin takibi için ilgili geliştiriciye (yemreyazgan) otomatik olarak atanmıştır.
-
-🏷️ Kurumsal Etiket (Label) Standartları
 Sürecin daha şeffaf ve izlenebilir olması için görevler dinamik ve renkli etiketlerle kategorize edilmiştir:
 
-1. Öncelik Seviyeleri (Priority)
-Priority: High (Kırmızı) -> Kritik ve öncelikli çözülmesi gereken işler.
+### 1. Öncelik Seviyeleri (Priority)
+* `Priority: High` (Kırmızı) -> Kritik ve öncelikli çözülmesi gereken işler.
+* `Priority: Medium` (Sarı) -> Standart geliştirme süreçleri.
+* `Priority: Low` (Yeşil) -> Düşük öncelikli işler.
 
-Priority: Medium (Sarı) -> Standart geliştirme süreçleri.
+### 2. İş Tipleri (Issue Type)
+* `Type: Story` (Mavi) -> Kullanıcı hikayeleri ve genel iş gereksinimleri.
+* `Type: Task` (Mor) -> Teknik geliştirmeler ve operasyonel işler.
+* `Type: Bug` (Koyu Kırmızı) -> Hata düzeltmeleri.
 
-Priority: Low (Yeşil) -> Düşük öncelikli işler.
+### 3. Efor Puanı (Story Point)
+* `Points: X` (Gri) -> Görevin efor karmaşıklığını belirten dinamik etiket.
 
-2. İş Tipleri (Issue Type)
-Type: Story (Mavi) -> Kullanıcı hikayeleri ve genel iş gereksinimleri.
+---
 
-Type: Task (Mor) -> Teknik geliştirmeler ve operational işler.
+## 💻 Geliştirilen Otomasyon Kodu (import.js)
 
-Type: Bug (Koyu Kırmızı) -> Hata düzeltmeleri.
+Jira.csv dosyasındaki çok satırlı açıklamaları, tırnak işaretlerini ve karmaşık sütun yapılarını profesyonel `csv-parse` kütüphanesiyle ayrıştırıp GitHub API'sine aktaran güncel script aşağıdadır:
 
-3. Efor Puanı (Story Point)
-Points: X (Gri) -> Görevin efor karmaşıklığını belirten dinamik etiket.
-
-💻 Geliştirilen Otomasyon Kodu (import.js)
-Jira.csv dosyasındaki çok satırlı açıklamaları, tırnak işaretlerini ve karmaşık sütun yapılarını profesyonel csv-parse kütüphanesiyle ayrıştırıp GitHub API'sine aktaran güncel script aşağıdadır:
-
-JavaScript
+```javascript
 const fs = require("fs");
 const axios = require("axios");
 const { parse } = require("csv-parse/sync");
@@ -249,3 +246,4 @@ ${subtasksMarkdown}
 }
 
 startMigration();
+```
