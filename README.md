@@ -1,6 +1,6 @@
 # 📊 Jira to GitHub Issue Migration Project
 
-Bu depo, Jira üzerindeki görevlerin, iş tiplerinin, öncelik derecelerinin, alt görevlerin (subtask), efor puanlarının (Story Point), versiyon bilgilerinin ve proje takvimlerinin GitHub Issues ve Milestones mimarisine kurumsal standartlarda taşınması (migration) amacıyla geliştirilmiştir.
+Bu depo, Jira üzerindeki görevlerin, iş tiplerinin, öncelik derecelerinin, alt görevlerin (subtask), efor puanlarının (Story Point) ve versiyon bilgilerinin GitHub Issues mimarisine kurumsal standartlarda taşınması (migration) amacıyla geliştirilmiştir.
 
 ---
 
@@ -8,15 +8,17 @@ Bu depo, Jira üzerindeki görevlerin, iş tiplerinin, öncelik derecelerinin, a
 
 Jira'daki mevcut proje yönetim yapısı, GitHub mimarisine birebir ve dinamik olarak şu şekilde entegre edilmiştir:
 
-* **Görev Başlıkları (Title):** Jira'daki her bir task, özet başlıklarıyla birlikte GitHub Issue başlığı olarak aktarılmıştır.
+* **Özgün Görev Kodları (Jira Keys):** Jira'daki her bir görev ve alt görev, özgün anahtar kodlarıyla (`MS-1`, `MS-2`, `MS-4` vb.) GitHub Issue başlıklarına birebir taşınmıştır:
+  * Ana Task Formatı: `[MS-1] API Sorgularında Optimizasyon...`
+  * Subtask Formatı: `[MS-4] [Subtask of MS-1] PostgreSQL tarafındaki 'users' tablosuna index eklenecek`
 * **Proje Metadataları (Metadata Table):** Her Issue'nun en üstüne kurumsal formatta Markdown tablosu eklenmiştir:
+  * **Jira Key:** Özgün görev kodu.
   * **Story Point:** Efor puanı.
   * **Fix Version & Affects Version:** Sürüm ve ortam bilgileri.
   * **Build Info:** Derleme/Build detayları.
   * **Due Date:** Bitiş/Teslim tarihi.
 * **İş İçerikleri (Description):** Görevlerin teknik detayları ve açıklamaları hatasız bir şekilde biçimlendirilerek taşınmıştır.
-* **Alt Görevler (Subtasks):** Jira'da ana göreve bağlı açılan subtask'lar, GitHub Issue içerisinde etkileşimli/tıklanabilir **Checklist (`- [ ]`)** formatına dönüştürülmüştür.
-* **Proje Takvimi (Milestone):** GitHub üzerinde **"Sprint 1: Temmuz Teslimatları"** adında süreli bir Kilometre Taşı (Milestone) oluşturulmuş ve tüm görevler bu takvime bağlanmıştır.
+* **Tıklanabilir Alt Görevler (Subtasks):** Ana görevlerin detay sayfalarında, o göreve bağlı olan subtask'lar Issue numaralarıyla birlikte (`- [ ] #130 - [MS-4] Alt Görev Metni`) etkileşimli ve tıklanabilir bağlantılar şeklinde listelenmiştir.
 * **Sorumlu Atamaları (Assignee):** Taşınan tüm görevler, projenin takibi için ilgili geliştiriciye (`yemreyazgan`) otomatik olarak atanmıştır.
 
 ---
@@ -34,15 +36,17 @@ Sürecin daha şeffaf ve izlenebilir olması için görevler dinamik ve renkli e
 * `Type: Story` (Mavi) -> Kullanıcı hikayeleri ve genel iş gereksinimleri.
 * `Type: Task` (Mor) -> Teknik geliştirmeler ve operasyonel işler.
 * `Type: Bug` (Koyu Kırmızı) -> Hata düzeltmeleri.
+* `Type: Subtask` (Yeşil) -> Alt görev bileşenleri.
 
-### 3. Efor Puanı (Story Point)
+### 3. Parent ve Efor Bağlantıları
+* `Parent: KEY` (Jira Mavisi) -> Subtask'ın direkt bağlı olduğu ana görevin anahtar kodu (Örn: `Parent: MS-1`).
 * `Points: X` (Gri) -> Görevin efor karmaşıklığını belirten dinamik etiket.
 
 ---
 
 ## 💻 Geliştirilen Otomasyon Kodu (import.js)
 
-Jira.csv dosyasındaki çok satırlı açıklamaları, tırnak işaretlerini ve karmaşık sütun yapılarını profesyonel `csv-parse` kütüphanesiyle ayrıştırıp GitHub API'sine aktaran güncel script aşağıdadır:
+Jira.csv dosyasındaki çok satırlı açıklamaları, tırnak işaretlerini ve karmaşık sütun yapılarını `csv-parse` kütüphanesiyle ayrıştırıp Jira kodları (MS-1, MS-2) ve subtask-parent ilişkisiyle GitHub API'sine aktaran güncel script aşağıdadır:
 
 ```javascript
 const fs = require("fs");
@@ -60,26 +64,27 @@ const colors = {
     "Priority: Low": "0e8a16",
     "Type: Story": "1d76db",
     "Type: Task": "5319e7",
-    "Type: Bug": "d73a4a"
+    "Type: Bug": "d73a4a",
+    "Type: Subtask": "0e8a16"
 };
 
-async function ensureLabel(labelName) {
+async function ensureLabel(labelName, customColor) {
     if (!labelName || labelName.endsWith(':')) return;
     try {
         await axios.post(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/labels`, {
             name: labelName,
-            color: colors[labelName] || "cccccc"
+            color: customColor || colors[labelName] || "cccccc"
         }, {
             headers: { "Authorization": `token ${GITHUB_TOKEN}`, "User-Agent": "Migration" }
         });
     } catch (e) {
-        // Etiket varsa pas geç
+        // Label zaten varsa pas geç
     }
 }
 
 async function startMigration() {
     try {
-        console.log("📄 Jira.csv profesyonel parser ile okunuyor...");
+        console.log("📄 Jira.csv okunuyor ve MS-1 / MS-2 kodları başlıklara işleniyor...");
 
         let content = fs.readFileSync(CSV_FILE_PATH, "utf8");
         if (content.startsWith('\uFEFF')) {
@@ -92,19 +97,26 @@ async function startMigration() {
             trim: true
         });
 
-        const tasks = {};
-        const subtasks = [];
+        const parentTasks = {};
+        const rawSubtasks = [];
 
         records.forEach(row => {
             const issueType = row["Issue Type"] ? row["Issue Type"].trim() : "";
             const issueKey = row["Issue key"] ? row["Issue key"].trim() : "";
-            const summary = row["Summary"] ? row["Summary"].trim() : "";
+            let summary = row["Summary"] ? row["Summary"].trim() : "";
 
             if (!summary) return;
 
+            summary = summary.replace(/^Task\s*\d+:\s*/i, "");
+
             if (issueType === "Subtask") {
                 const parentKey = row["Parent key"] ? row["Parent key"].trim() : "";
-                subtasks.push({ summary, parentKey });
+                rawSubtasks.push({
+                    key: issueKey,
+                    summary: summary,
+                    parentKey: parentKey,
+                    priority: row["Priority"] || "Medium"
+                });
             } else {
                 const rawDesc = row["Description"] || "";
 
@@ -127,7 +139,7 @@ async function startMigration() {
                 let rawDueDate = row["Due date"] || "N/A";
                 let dueDate = (rawDueDate && rawDueDate !== "N/A") ? rawDueDate.split(" ")[0] : "N/A";
 
-                tasks[issueKey] = {
+                parentTasks[issueKey] = {
                     key: issueKey,
                     type: issueType || "Task",
                     summary: summary,
@@ -138,40 +150,53 @@ async function startMigration() {
                     buildInfo: buildInfo,
                     dueDate: dueDate,
                     priority: priority,
-                    subtasks: []
+                    subtaskIssues: []
                 };
             }
         });
 
-        subtasks.forEach(st => {
-            if (tasks[st.parentKey]) {
-                tasks[st.parentKey].subtasks.push(st.summary);
-            }
-        });
+        console.log("🚀 1. Adım: Subtask'lar Parent Jira kodlarıyla oluşturuluyor...");
+        await ensureLabel("Type: Subtask");
+        await ensureLabel("Jira-Migration");
 
-        console.log("🚀 1. Adım: Sprint Milestone kontrol ediliyor...");
-        let milestoneNumber;
-        try {
-            const milestoneResponse = await axios.post(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/milestones`, {
-                title: "Sprint 1: Temmuz Teslimatları",
-                description: "Jira'dan aktarılan görevlerin teslimat takvimi.",
-                due_on: "2026-07-25T18:00:00Z"
-            }, {
+        for (const st of rawSubtasks) {
+            const stPriorityLabel = `Priority: ${st.priority}`;
+            const parentLabel = `Parent: ${st.parentKey}`;
+            await ensureLabel(stPriorityLabel);
+            await ensureLabel(parentLabel, "0052cc");
+
+            const parentSummary = parentTasks[st.parentKey] ? parentTasks[st.parentKey].summary : st.parentKey;
+
+            const stPayload = {
+                title: `[${st.key}] [Subtask of ${st.parentKey}] ${st.summary}`,
+                body: `### 📌 Alt Görev Detayı\n- **Jira Key:** \`${st.key}\`\n- **Bağlı Olduğu Ana Task:** \`${st.parentKey}\` - ${parentSummary}\n\n*Jira Migration Tool ile Otomatik Oluşturuldu*`,
+                assignees: ["yemreyazgan"],
+                labels: ["Jira-Migration", "Type: Subtask", parentLabel, stPriorityLabel]
+            };
+
+            const stResponse = await axios.post(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/issues`, stPayload, {
                 headers: { 
                     "Authorization": `token ${GITHUB_TOKEN}`, 
                     "Accept": "application/vnd.github.v3+json", 
                     "User-Agent": "Migration" 
                 }
             });
-            milestoneNumber = milestoneResponse.data.number;
-        } catch (e) {
-            console.log("ℹ️ Milestone zaten mevcut.");
+
+            const createdIssueNumber = stResponse.data.number;
+
+            if (parentTasks[st.parentKey]) {
+                parentTasks[st.parentKey].subtaskIssues.push({
+                    number: createdIssueNumber,
+                    summary: st.summary,
+                    key: st.key
+                });
+            }
         }
 
-        console.log("🚀 2. Adım: Görevler GitHub'a aktarılıyor...\n");
+        console.log("\n🚀 2. Adım: Ana Görevler Jira Kodlarıyla (MS-1, MS-2...) yükleniyor...\n");
 
-        for (const key in tasks) {
-            const t = tasks[key];
+        for (const key in parentTasks) {
+            const t = parentTasks[key];
 
             const priorityLabel = `Priority: ${t.priority}`;
             const typeLabel = `Type: ${t.type}`;
@@ -180,11 +205,10 @@ async function startMigration() {
             await ensureLabel(priorityLabel);
             await ensureLabel(typeLabel);
             if (t.storyPoints !== "N/A") await ensureLabel(pointLabel);
-            await ensureLabel("Jira-Migration");
 
             let subtasksMarkdown = "";
-            if (t.subtasks.length > 0) {
-                subtasksMarkdown = t.subtasks.map(s => `- [ ] ${s}`).join("\n");
+            if (t.subtaskIssues.length > 0) {
+                subtasksMarkdown = t.subtaskIssues.map(s => `- [ ] #${s.number} - **[${s.key}]** ${s.summary}`).join("\n");
             } else {
                 subtasksMarkdown = "_Alt görev bulunmuyor._";
             }
@@ -192,6 +216,7 @@ async function startMigration() {
             const issueBody = `### 📌 Proje Metadataları
 | Alan | Değer |
 | :--- | :--- |
+| **Jira Key** | **${t.key}** |
 | **Story Point** | ${t.storyPoints} |
 | **Fix Version** | ${t.fixVersion} |
 | **Affects Version** | ${t.affectsVersion} |
@@ -217,15 +242,11 @@ ${subtasksMarkdown}
             if (t.storyPoints !== "N/A") labelsToApply.push(pointLabel);
 
             const issuePayload = {
-                title: t.summary,
+                title: `[${t.key}] ${t.summary}`,
                 body: issueBody,
                 assignees: ["yemreyazgan"],
                 labels: labelsToApply
             };
-
-            if (milestoneNumber) {
-                issuePayload.milestone = milestoneNumber;
-            }
 
             await axios.post(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/issues`, issuePayload, {
                 headers: { 
